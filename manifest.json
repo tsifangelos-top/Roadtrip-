@@ -1,8 +1,9 @@
 {
   "name": "Road Trip 2026",
-  "short_name": "Road Trip",
-  "description": "Οικογενειακό Road Trip Ιούλιος 2026 — Θεσσαλονίκη → Ευρώπη",
-  "start_url": "/",
+  "short_name": "Road Trip '26",
+  "description": "Οικογενειακό Road Trip Ιούλιος 2026",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f0f0f",
   "theme_color": "#0f0f0f",
