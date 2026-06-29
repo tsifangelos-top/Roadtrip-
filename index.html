@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Road Trip '26">
+<meta name="theme-color" content="#0f0f0f">
+<title>🚗 Road Trip '26</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#0f0f0f; --cream:#f5f0e8; --warm:#e8dcc8;
+  --accent:#c0392b; --gold:#d4a017; --muted:#8a7f72;
+  --hotel:#1a6fc4; --poi:#7b2d8b; --custom:#e67e22;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; font-family:'DM Sans',sans-serif; background:var(--ink); }
+#app { display:flex; flex-direction:column; height:100%; }
+#map { flex:1; min-height:0; position:relative; }
+
+/* FAB buttons on map */
+#fab-group { position:absolute; bottom:16px; right:12px; z-index:800; display:flex; flex-direction:column; gap:10px; }
+.fab {
+  width:48px; height:48px; border-radius:50%; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:20px;
+  box-shadow:0 4px 14px rgba(0,0,0,.5); transition:transform .15s;
+  touch-action:manipulation;
+}
+.fab:active { transform:scale(.9); }
+#fab-add { background:var(--custom); color:white; }
+#fab-search { background:var(--poi); color:white; }
+#fab-locate { background:var(--accent); color:white; }
+
+/* BOTTOM PANEL */
+#panel { height:50vh; background:var(--cream); display:flex; flex-direction:column; border-top:2.5px solid var(--ink); overflow:hidden; }
+#drag-handle { width:40px; height:5px; border-radius:3px; background:rgba(0,0,0,.2); margin:8px auto 2px; flex-shrink:0; }
+#panel-header { background:var(--ink); padding:8px 16px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }
+#panel-header h1 { font-family:'Bebas Neue'; font-size:20px; color:var(--cream); letter-spacing:2px; }
+#panel-header .sub { font-size:9px; color:var(--gold); letter-spacing:1px; }
+#panel-header .dt { font-size:10px; color:var(--warm); }
+
+.tabs { display:flex; border-bottom:2px solid var(--ink); flex-shrink:0; }
+.tab-btn { flex:1; padding:8px 2px; font-size:9px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; cursor:pointer; background:var(--warm); border:none; border-right:1px solid var(--ink); color:var(--muted); transition:all .2s; touch-action:manipulation; }
+.tab-btn:last-child { border-right:none; }
+.tab-btn.active { background:var(--cream); color:var(--ink); }
+
+.panel-content { overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }
+.panel-content.hidden { display:none; }
+.p8 { padding:8px; }
+
+/* CATEGORY FILTER BAR */
+#cat-filter { padding:8px 8px 4px; display:flex; gap:6px; overflow-x:auto; flex-shrink:0; background:var(--warm); border-bottom:1px solid #ccc; -webkit-overflow-scrolling:touch; }
+#cat-filter::-webkit-scrollbar { display:none; }
+.cat-chip { padding:5px 11px; border-radius:20px; border:1.5px solid var(--ink); font-size:10px; font-weight:600; cursor:pointer; background:white; white-space:nowrap; flex-shrink:0; touch-action:manipulation; transition:all .15s; }
+.cat-chip.on { background:var(--ink); color:var(--cream); }
+.cat-chip.poi-chip.on { background:var(--poi); border-color:var(--poi); color:white; }
+
+/* STOP CARDS */
+.stop-card { border:1.5px solid var(--ink); border-radius:6px; margin-bottom:8px; background:white; cursor:pointer; overflow:hidden; }
+.stop-card:active { opacity:.85; }
+.stop-card.active { background:var(--ink); }
+.stop-header { display:flex; align-items:center; gap:10px; padding:10px 12px; }
+.stop-dot { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; border:2px solid var(--ink); }
+.stop-card.active .stop-dot { border-color:var(--cream); }
+.stop-name { font-family:'Bebas Neue'; font-size:16px; letter-spacing:1px; }
+.stop-card.active .stop-name { color:var(--cream); }
+.stop-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+.stop-card.active .stop-meta { color:var(--gold); }
+.stop-nights { font-size:10px; background:var(--gold); color:var(--ink); padding:3px 8px; border-radius:20px; font-weight:700; white-space:nowrap; flex-shrink:0; }
+.stop-card.active .stop-nights { background:var(--accent); color:white; }
+.sub-list { padding:0 12px 10px 52px; display:none; }
+.stop-card.open .sub-list { display:block; }
+.sec-div { font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); text-transform:uppercase; padding:4px 0 3px; border-bottom:1px solid #e0d8cc; margin-bottom:5px; }
+.stop-card.active .sec-div { color:#a09080; border-bottom-color:#333; }
+
+.hotel-block { background:linear-gradient(135deg,#1a6fc4,#0d4a8a); border-radius:4px; padding:8px 10px; margin-bottom:7px; cursor:pointer; }
+.hotel-block:active { opacity:.85; }
+.hb-name { font-size:11px; font-weight:600; color:#fff; }
+.hb-addr { font-size:10px; color:rgba(255,255,255,.6); margin-top:2px; }
+.hb-dates { font-size:10px; color:var(--gold); font-weight:600; margin-top:3px; }
+
+.attr-item { display:flex; align-items:flex-start; gap:8px; padding:5px 0; font-size:12px; cursor:pointer; border-bottom:1px dashed #ddd; }
+.attr-item:last-child { border-bottom:none; }
+.stop-card.active .attr-item { color:var(--warm); border-bottom-color:#333; }
+.ai { font-size:13px; flex-shrink:0; }
+.an { font-weight:600; font-size:11px; }
+.at { font-size:10px; color:var(--muted); }
+.stop-card.active .at { color:#a09080; }
+
+/* HOTELS PANEL */
+.hotel-full-card { border:2px solid var(--hotel); border-radius:6px; margin-bottom:10px; overflow:hidden; cursor:pointer; }
+.hotel-full-card:active { opacity:.85; }
+.hfc-head { padding:10px 14px; display:flex; align-items:center; gap:8px; }
+.hfc-city { font-family:'Bebas Neue'; font-size:16px; color:white; letter-spacing:1px; flex:1; }
+.nb { font-size:10px; background:var(--gold); color:var(--ink); padding:2px 8px; border-radius:20px; font-weight:700; }
+.hfc-body { background:white; padding:10px 14px; }
+.hfc-name { font-weight:700; font-size:13px; }
+.hfc-addr { font-size:11px; color:var(--muted); margin-top:3px; }
+.hfc-dates { font-size:11px; color:var(--hotel); font-weight:600; margin-top:5px; }
+
+/* NOTIFICATIONS */
+.notif-card { border:1.5px solid var(--ink); border-radius:6px; margin-bottom:8px; background:white; overflow:hidden; animation:slideIn .25s ease; }
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.notif-head { display:flex; align-items:center; gap:8px; padding:9px 12px; }
+.notif-title { font-family:'Bebas Neue'; font-size:14px; letter-spacing:1px; flex:1; }
+.notif-time-lbl { font-size:10px; color:var(--muted); }
+.notif-body { padding:9px 12px; font-size:12px; color:#333; }
+.notif-city-lbl { font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
+.notif-card.type-hotel .notif-head { background:#0d4a8a; }
+.notif-card.type-hotel .notif-title { color:#6ab0f5; }
+.notif-card.type-hotel .notif-city-lbl { color:#1a6fc4; }
+.notif-card.type-poi .notif-head { background:#4a1060; }
+.notif-card.type-poi .notif-title { color:#c88ae0; }
+.notif-card.type-poi .notif-city-lbl { color:var(--poi); }
+.notif-card.type-custom .notif-head { background:#7a3a00; }
+.notif-card.type-custom .notif-title { color:#f5a96a; }
+.notif-card.type-custom .notif-city-lbl { color:var(--custom); }
+.notif-card.type-stop .notif-head { background:var(--ink); }
+.notif-card.type-stop .notif-title { color:var(--gold); }
+.notif-card.type-stop .notif-city-lbl { color:var(--accent); }
+.notif-clear { padding:6px 0 10px; text-align:center; font-size:11px; color:var(--muted); cursor:pointer; text-decoration:underline; }
+
+/* CUSTOM POIs LIST */
+.custom-poi-card { border:1.5px solid var(--custom); border-radius:6px; margin-bottom:8px; overflow:hidden; display:flex; }
+.cpc-color { width:8px; background:var(--custom); flex-shrink:0; }
+.cpc-body { flex:1; padding:9px 12px; }
+.cpc-name { font-weight:700; font-size:13px; }
+.cpc-type { font-size:11px; color:var(--muted); }
+.cpc-del { padding:0 12px; display:flex; align-items:center; cursor:pointer; font-size:18px; color:#ccc; touch-action:manipulation; }
+.cpc-del:active { color:var(--accent); }
+
+.no-content { text-align:center; padding:28px 20px; color:var(--muted); font-size:13px; }
+.no-content .big { font-size:36px; margin-bottom:8px; }
+
+/* ADD POI MODAL */
+#poi-modal {
+  position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:2000;
+  display:none; align-items:flex-end;
+}
+#poi-modal.open { display:flex; }
+#poi-form {
+  background:var(--cream); width:100%; border-radius:16px 16px 0 0;
+  padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+  border-top:3px solid var(--ink);
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+#poi-form h2 { font-family:'Bebas Neue'; font-size:22px; letter-spacing:1px; margin-bottom:14px; }
+.form-row { margin-bottom:12px; }
+.form-row label { font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:4px; }
+.form-row input, .form-row select {
+  width:100%; padding:10px 12px; border:1.5px solid var(--ink); border-radius:6px;
+  font-family:'DM Sans'; font-size:14px; background:white; color:var(--ink);
+  -webkit-appearance:none;
+}
+.form-row input:focus, .form-row select:focus { outline:none; border-color:var(--custom); }
+.emoji-grid { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.emoji-btn { width:38px; height:38px; border:1.5px solid #ddd; border-radius:8px; font-size:18px; cursor:pointer; background:white; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
+.emoji-btn.sel { border-color:var(--custom); background:#fff3e0; }
+.form-actions { display:flex; gap:10px; margin-top:16px; }
+.btn-cancel { flex:1; padding:12px; border:1.5px solid var(--ink); border-radius:6px; font-family:'Bebas Neue'; font-size:15px; letter-spacing:1px; cursor:pointer; background:white; touch-action:manipulation; }
+.btn-save { flex:2; padding:12px; border:none; border-radius:6px; font-family:'Bebas Neue'; font-size:15px; letter-spacing:1px; cursor:pointer; background:var(--custom); color:white; touch-action:manipulation; }
+.btn-save:active,.btn-cancel:active { opacity:.8; }
+#tap-hint { position:absolute; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.75); color:white; padding:8px 16px; border-radius:20px; font-size:12px; white-space:nowrap; z-index:800; display:none; pointer-events:none; }
+
+/* POI DISCOVERED CARDS */
+.disc-card { border:1.5px solid var(--poi); border-radius:6px; margin-bottom:8px; overflow:hidden; display:flex; cursor:pointer; }
+.disc-card:active { opacity:.85; }
+.dc-side { width:8px; background:var(--poi); flex-shrink:0; }
+.dc-body { flex:1; padding:9px 12px; }
+.dc-name { font-weight:700; font-size:12px; }
+.dc-type { font-size:10px; color:var(--muted); }
+.dc-dist { font-size:10px; color:var(--poi); font-weight:600; margin-top:2px; }
+
+/* BOTTOM TOOLBAR */
+#toolbar { display:flex; border-top:2px solid var(--ink); background:var(--warm); padding:8px 12px; padding-bottom:calc(8px + env(safe-area-inset-bottom)); flex-shrink:0; gap:8px; align-items:center; }
+#radius-display { font-size:11px; font-weight:700; color:var(--accent); min-width:42px; text-align:center; }
+#toolbar input[type="range"] { flex:1; accent-color:var(--accent); }
+
+/* Leaflet popups */
+.leaflet-popup-content-wrapper { background:var(--ink)!important; color:var(--cream)!important; border-radius:6px!important; border:2px solid var(--gold)!important; font-family:'DM Sans',sans-serif!important; }
+.leaflet-popup-tip { background:var(--ink)!important; }
+.leaflet-popup-content { margin:10px 14px!important; font-size:13px; }
+.pop-title { font-family:'Bebas Neue'; font-size:17px; letter-spacing:1px; color:var(--gold); }
+.pop-hotel { font-family:'Bebas Neue'; font-size:15px; color:#6ab0f5; }
+.pop-poi { font-family:'Bebas Neue'; font-size:15px; color:#c88ae0; }
+.pop-custom { font-family:'Bebas Neue'; font-size:15px; color:#f5a96a; }
+.pop-meta { font-size:11px; color:var(--muted); margin-top:3px; }
+.pop-list { font-size:12px; margin-top:6px; }
+.pop-list li { list-style:none; padding:2px 0; }
+.pop-list li::before { content:'→ '; color:var(--accent); }
+
+/* TOASTS */
+#toasts { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:3000; display:flex; flex-direction:column; gap:7px; width:92%; max-width:360px; pointer-events:none; }
+.toast { background:var(--ink); color:var(--cream); padding:10px 14px; border-radius:6px; border-left:4px solid var(--gold); font-size:12px; box-shadow:0 4px 20px rgba(0,0,0,.5); animation:toastIn .3s ease; }
+@keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.toast-title { font-family:'Bebas Neue'; font-size:13px; color:var(--gold); margin-bottom:2px; letter-spacing:1px; }
+.toast.t-poi { border-left-color:var(--poi); }
+.toast.t-poi .toast-title { color:#c88ae0; }
+.toast.t-custom { border-left-color:var(--custom); }
+.toast.t-custom .toast-title { color:#f5a96a; }
+.toast.t-hotel { border-left-color:var(--hotel); }
+.toast.t-hotel .toast-title { color:#6ab0f5; }
+
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--muted); border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map">
+    <div id="fab-group">
+      <button class="fab" id="fab-add" onclick="startAddPOI()" title="Προσθήκη σημείου">➕</button>
+      <button class="fab" id="fab-search" onclick="searchNearbyPOIs()" title="Αναζήτηση POIs">🔍</button>
+      <button class="fab" id="fab-follow" onclick="toggleFollow()" title="Follow mode">🧭</button>
+      <button class="fab" id="fab-locate" onclick="locateMe()" title="Θέση μου">📍</button>
+      <button class="fab" id="fab-manual" onclick="startManualLocation()" title="Χειροκίνητη θέση">🎯</button>
+    </div>
+    <div id="tap-hint">Πάτα στον χάρτη για να επιλέξεις τοποθεσία</div>
+    <div id="manual-hint" style="display:none;position:absolute;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(26,111,196,.92);color:white;padding:8px 16px;border-radius:20px;font-size:12px;white-space:nowrap;z-index:800;pointer-events:none;">🎯 Πάτα οπουδήποτε για να ορίσεις θέση</div>  </div>
+
+  <div id="panel">
+    <div id="drag-handle"></div>
+    <div id="panel-header">
+      <div>
+        <h1>🚗 Road Trip '26</h1>
+        <div class="sub">ΘΕΣΣΑΛΟΝΙΚΗ → ΕΥΡΩΠΗ → HOME</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--gold);font-weight:600">5–18 Ιουλ 2026</div>
+        <div class="dt">13 ημέρες · 11 βράδια</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('itin')">🗺 Διαδρομή</button>
+      <button class="tab-btn" onclick="switchTab('hotels')">🏨 Ξενοδ.</button>
+      <button class="tab-btn" onclick="switchTab('custom')">📌 Custom</button>
+      <button class="tab-btn" onclick="switchTab('notifs')">🔔 Alerts</button>
+    </div>
+
+    <!-- CATEGORY FILTER (shown only on itin/custom tabs) -->
+    <div id="cat-filter">
+      <span style="font-size:10px;font-weight:700;color:var(--muted);align-self:center;white-space:nowrap;margin-right:2px">ΦΙΛΤΡΑ:</span>
+      <button class="cat-chip on" data-cat="hotel" onclick="toggleCat(this,'hotel')">🏨 Ξενοδοχεία</button>
+      <button class="cat-chip on" data-cat="sight" onclick="toggleCat(this,'sight')">🗿 Αξιοθέατα</button>
+      <button class="cat-chip on poi-chip" data-cat="museum" onclick="toggleCat(this,'museum')">🏛 Μουσεία</button>
+      <button class="cat-chip on poi-chip" data-cat="restaurant" onclick="toggleCat(this,'restaurant')">🍽 Εστιατόρια</button>
+      <button class="cat-chip on poi-chip" data-cat="cafe" onclick="toggleCat(this,'cafe')">☕ Καφέ</button>
+      <button class="cat-chip on poi-chip" data-cat="bar" onclick="toggleCat(this,'bar')">🍺 Bar</button>
+      <button class="cat-chip on poi-chip" data-cat="church" onclick="toggleCat(this,'church')">⛪ Εκκλησίες</button>
+      <button class="cat-chip on poi-chip" data-cat="pharmacy" onclick="toggleCat(this,'pharmacy')">💊 Φαρμακεία</button>
+      <button class="cat-chip on poi-chip" data-cat="atm" onclick="toggleCat(this,'atm')">💳 ATM</button>
+      <button class="cat-chip on poi-chip" data-cat="supermarket" onclick="toggleCat(this,'supermarket')">🛒 Σούπερ μάρκετ</button>
+      <button class="cat-chip on poi-chip" data-cat="historic" onclick="toggleCat(this,'historic')">🏺 Ιστορικά</button>
+    </div>
+
+    <div id="tab-itin" class="panel-content"><div class="p8" id="itin-inner"></div></div>
+    <div id="tab-hotels" class="panel-content hidden"><div class="p8" id="hotels-inner"></div></div>
+    <div id="tab-custom" class="panel-content hidden"><div class="p8" id="custom-inner"></div></div>
+    <div id="tab-notifs" class="panel-content hidden"><div class="p8" id="notif-inner">
+      <div class="no-content"><div class="big">🔕</div>Καμία ειδοποίηση ακόμα.<br><span style="font-size:11px;color:#bbb;margin-top:6px;display:block">Πάτα 📍 ή ενεργοποίησε GPS</span></div>
+    </div></div>
+
+    <div id="toolbar">
+      <span id="radius-display">500m</span>
+      <input type="range" id="rslider" min="100" max="2000" step="100" value="500" oninput="updateRadius(this.value)">
+      <span style="font-size:10px;color:var(--muted);white-space:nowrap">ακτίνα alerts</span>
+    </div>
+  </div>
+</div>
+
+<!-- ADD POI MODAL -->
+<div id="poi-modal" onclick="closeModalIfOutside(event)">
+  <div id="poi-form">
+    <h2>📌 Νέο Σημείο</h2>
+    <div class="form-row">
+      <label>Όνομα</label>
+      <input type="text" id="poi-name" placeholder="π.χ. Εκκλησία της πλατείας">
+    </div>
+    <div class="form-row">
+      <label>Κατηγορία</label>
+      <select id="poi-cat">
+        <option value="sight">🗿 Αξιοθέατο</option>
+        <option value="restaurant">🍽 Εστιατόριο</option>
+        <option value="cafe">☕ Καφέ</option>
+        <option value="bar">🍺 Bar</option>
+        <option value="museum">🏛 Μουσείο</option>
+        <option value="church">⛪ Εκκλησία</option>
+        <option value="nature">🌿 Φύση</option>
+        <option value="shop">🛍 Κατάστημα</option>
+        <option value="other">📍 Άλλο</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Emoji</label>
+      <div class="emoji-grid" id="emoji-grid">
+        <button class="emoji-btn sel" onclick="selectEmoji(this,'📍')">📍</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🍽')">🍽</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'☕')">☕</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🍺')">🍺</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🏛')">🏛</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'⛪')">⛪</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🏰')">🏰</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🌿')">🌿</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🏖')">🏖</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🛍')">🛍</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🎭')">🎭</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'📸')">📸</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'🏥')">🏥</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'💊')">💊</button>
+        <button class="emoji-btn" onclick="selectEmoji(this,'⭐')">⭐</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Τοποθεσία</label>
+      <input type="text" id="poi-loc" placeholder="Πάτα στον χάρτη ή γράψε διεύθυνση" readonly style="background:#f5f5f5;font-size:12px">
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeModal()">Ακύρωση</button>
+      <button class="btn-save" onclick="savePOI()">💾 Αποθήκευση</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+// ============================================================
+// STATIC DATA
+// ============================================================
+const HOTELS = [
+  {id:'h_bg1',cityId:'belgrade1',city:'Βελιγράδι',name:'Hotel Nobel Palace',emoji:'🏨',address:'Ruzveltova 23, Palilula, 11000',checkin:'5/7',checkout:'6/7',nights:1,lat:44.8201,lng:20.4801,color:'#c0392b'},
+  {id:'h_bp',cityId:'budapest',city:'Βουδαπέστη',name:'The Amberlyn Suite Hotel',emoji:'🏨',address:'4 Rökk Szilárd utca, 1085 Budapest',checkin:'6/7',checkout:'8/7',nights:2,lat:47.4951,lng:19.0630,color:'#8e44ad'},
+  {id:'h_vi',cityId:'vienna',city:'Βιέννη',name:'Austria Trend Hotel Doppio Wien',emoji:'🏨',address:'Rennweg 99, 1030 Wien',checkin:'8/7',checkout:'10/7',nights:2,lat:48.1958,lng:16.3890,color:'#16a085'},
+  {id:'h_al',cityId:'austria_alps',city:'Au — Άλπεις',name:'Κουμπάροι (Au, 6883)',emoji:'🏡',address:'Au im Bregenzerwald, 6883 Αυστρία',checkin:'10/7',checkout:'13/7',nights:3,lat:47.3194,lng:9.9794,color:'#27ae60'},
+  {id:'h_ve',cityId:'venice',city:'Μέστρε / Βενετία',name:'Garden Hotel Michelangelo',emoji:'🏨',address:'Via Forte Marghera 69, 30173 Mestre',checkin:'13/7',checkout:'16/7',nights:3,lat:45.4790,lng:12.2350,color:'#2980b9'},
+  {id:'h_zg',cityId:'zagreb',city:'Ζάγκρεμπ',name:'Design Park Residences StayFLOK',emoji:'🏨',address:'Šubićeva ulica 5, 10000 Zagreb',checkin:'16/7',checkout:'17/7',nights:1,lat:45.8145,lng:15.9920,color:'#e74c3c'},
+  {id:'h_bg2',cityId:'belgrade2',city:'Βελιγράδι (επιστροφή)',name:'Nobel Gallery Hotel',emoji:'🏨',address:'23 Višegradska, Savski Venac',checkin:'17/7',checkout:'18/7',nights:1,lat:44.8033,lng:20.4631,color:'#c0392b'},
+];
+
+const STOPS = [
+  {id:'thessaloniki',name:'Θεσσαλονίκη',lat:40.6401,lng:22.9444,nights:0,type:'start',dates:'5 Ιουλ — Αναχώρηση',color:'#2ecc71',emoji:'🏛',attrs:[
+    {name:'Λευκός Πύργος',type:'Αξιοθέατο',emoji:'🏰',lat:40.6263,lng:22.9483},
+    {name:'Αγορά Μοδιάνο',type:'Αγορά',emoji:'🛒',lat:40.6335,lng:22.9417},
+    {name:'Πλατεία Αριστοτέλους',type:'Καφέ / Βόλτα',emoji:'☕',lat:40.6319,lng:22.9438},
+  ]},
+  {id:'sofia',name:'Σόφια',lat:42.6977,lng:23.3219,nights:0,type:'stop',dates:'5 Ιουλ — Ημερήσια στάση',color:'#e67e22',emoji:'🕌',attrs:[
+    {name:'Αλεξάντερ Νέφσκι',type:'Εκκλησία',emoji:'⛪',lat:42.6955,lng:23.3317},
+    {name:'Vitosha Boulevard',type:'Βόλτα / Ψώνια',emoji:'🚶',lat:42.6931,lng:23.3215},
+    {name:'Central Hali Market',type:'Αγορά / Φαγητό',emoji:'🍽',lat:42.6973,lng:23.3245},
+    {name:'Boyana Church',type:'UNESCO',emoji:'🏛',lat:42.6433,lng:23.2643},
+    {name:'Serdika Ruins',type:'Αρχαιολογία',emoji:'🏺',lat:42.6977,lng:23.3218},
+  ]},
+  {id:'belgrade1',name:'Βελιγράδι',lat:44.8176,lng:20.4569,nights:1,hotel:'h_bg1',dates:'5–6 Ιουλ',color:'#c0392b',emoji:'🏯',attrs:[
+    {name:'Φρούριο Καλεμεγντάν',type:'Αξιοθέατο',emoji:'🏯',lat:44.8232,lng:20.4506},
+    {name:'Knez Mihailova',type:'Πεζόδρομος',emoji:'🚶',lat:44.8187,lng:20.4614},
+    {name:'Skadarlija',type:'Bohemian Quarter',emoji:'🎭',lat:44.8176,lng:20.4671},
+  ]},
+  {id:'budapest',name:'Βουδαπέστη',lat:47.4979,lng:19.0402,nights:2,hotel:'h_bp',dates:'6–8 Ιουλ',color:'#8e44ad',emoji:'🏰',attrs:[
+    // 🏛 ΑΞΙΟΘΕΑΤΑ
+    {name:'Κοινοβούλιο Ουγγαρίας',type:'Κτίριο · €8 EU / €26 non-EU · κράτηση online',emoji:'🏛',lat:47.5072,lng:19.0453},
+    {name:'Κάστρο Buda / Budavár',type:'Κάστρο · ~€8-10 · πήγαινε νωρίς',emoji:'🏰',lat:47.4960,lng:19.0398},
+    {name:'Fisherman\'s Bastion',type:'Φρούριο · Κάτω δωρεάν / Πύργοι ~€4',emoji:'🏯',lat:47.5015,lng:19.0343},
+    {name:'Matthias Church',type:'Εκκλησία · ~€8-10',emoji:'⛪',lat:47.5016,lng:19.0342},
+    {name:'St. Stephen\'s Basilica',type:'Εκκλησία · Ναός δωρεάν / Θόλος ~€8',emoji:'⛪',lat:47.5007,lng:19.0527},
+    {name:'Hungarian National Gallery',type:'Μουσείο · ~€8 · μέσα στο Buda Castle',emoji:'🎨',lat:47.4959,lng:19.0396},
+    {name:'Museum of Fine Arts',type:'Μουσείο · ~€8 · Heroes Square',emoji:'🖼',lat:47.5147,lng:19.0797},
+    {name:'Chain Bridge (Széchenyi)',type:'Γέφυρα · Δωρεάν',emoji:'🌉',lat:47.4975,lng:19.0448},
+    {name:'Liberty Bridge',type:'Γέφυρα · Δωρεάν · ωραία θέα',emoji:'🌉',lat:47.4866,lng:19.0533},
+    {name:'Shoes on Danube',type:'Μνημείο Ολοκαυτώματος · Δωρεάν',emoji:'👟',lat:47.5068,lng:19.0441},
+    {name:'Heroes Square',type:'Πλατεία / Μνημείο · Δωρεάν',emoji:'🗿',lat:47.5147,lng:19.0797},
+    {name:'Vajdahunyad Castle + Λίμνη',type:'Κάστρο · Εξ. δωρεάν / Μουσείο ~€4',emoji:'🏰',lat:47.5147,lng:19.0817},
+    {name:'Citadella',type:'Φρούριο · Εξ. δωρεάν / Εσ. ~€12',emoji:'🏯',lat:47.4868,lng:19.0439},
+    {name:'Gellért Hill',type:'Φυσικό τοπίο · Δωρεάν · πανοραμική θέα',emoji:'🏔',lat:47.4868,lng:19.0433},
+    {name:'Margaret Island',type:'Πάρκο / Νησί · Δωρεάν',emoji:'🏝',lat:47.5258,lng:19.0483},
+    {name:'City Park (Városliget)',type:'Πάρκο · Δωρεάν',emoji:'🌳',lat:47.5152,lng:19.0770},
+    {name:'Central Market Hall',type:'Αγορά · Δωρεάν · τρόφιμα & σουβενίρ',emoji:'🛒',lat:47.4873,lng:19.0590},
+    {name:'Riverside Promenade',type:'Πεζοδρόμιο · Δωρεάν · κλειστό για αμάξια βράδυ',emoji:'🚶',lat:47.5050,lng:19.0440},
+    {name:'Parisi Passage',type:'Νεογοτθικό arcade · Δωρεάν',emoji:'🏛',lat:47.4975,lng:19.0550},
+    {name:'Gozsdu Street',type:'Passageway με μπαρ · Δωρεάν',emoji:'🎭',lat:47.4985,lng:19.0655},
+    {name:'Széchenyi Baths',type:'Θερμά λουτρά · ~€25',emoji:'♨️',lat:47.5187,lng:19.0816},
+    {name:'Ervin Szabó Library',type:'Νεοβαρόκ βιβλιοθήκη · Δωρεάν',emoji:'📚',lat:47.4940,lng:19.0630},
+    // 🍽 ΦΑΓΗΤΟ & ΚΑΦΕ
+    {name:'New York Café',type:'Ιστορικό καφέ · τουριστικό',emoji:'☕',lat:47.4994,lng:19.0668},
+    {name:'Café Gerbeaud',type:'Ιστορικό καφέ · Vörösmarty Square',emoji:'☕',lat:47.4983,lng:19.0524},
+    {name:'Szimpla Kert',type:'Ruin Bar · το πιο διάσημο',emoji:'🍺',lat:47.4994,lng:19.0662},
+    {name:'Karavan Street Food',type:'Container street food market',emoji:'🍔',lat:47.4980,lng:19.0662},
+    {name:'Gundel',type:'Κλασικό ιστορικό εστιατόριο · €€€€',emoji:'🍽',lat:47.5148,lng:19.0804},
+    {name:'Menza',type:'Ουγγρική κουζίνα · ρετρό · €€',emoji:'🍽',lat:47.5007,lng:19.0575},
+    {name:'Getto Gulyás',type:'Specialty Goulash · €',emoji:'🍲',lat:47.4990,lng:19.0635},
+    {name:'Kádár Étkezde',type:'Κλασικό ουγγρικό μεσημεριανό · €',emoji:'🥘',lat:47.4990,lng:19.0653},
+    {name:'Pontoon',type:'Open-Air Bar · δίπλα στο Chain Bridge · €€',emoji:'🌊',lat:47.4978,lng:19.0446},
+  ]},
+  {id:'vienna',name:'Βιέννη',lat:48.2082,lng:16.3738,nights:2,hotel:'h_vi',dates:'8–10 Ιουλ',color:'#16a085',emoji:'🎻',attrs:[
+    // 🏛 ΑΞΙΟΘΕΑΤΑ ⭐⭐⭐
+    {name:'Stephansdom',type:'Καθεδρικός ⭐⭐⭐ · Δωρεάν (πύργοι ~€6-8)',emoji:'⛪',lat:48.2088,lng:16.3728},
+    {name:'Schönbrunn Palace + Κήποι',type:'Ανάκτορο ⭐⭐⭐ · €34 · κράτηση online',emoji:'🏛',lat:48.1849,lng:16.3123},
+    {name:'Schönbrunn — Κήποι (δωρεάν)',type:'Κήπος ⭐⭐⭐ · Δωρεάν',emoji:'🌿',lat:48.1849,lng:16.3123},
+    {name:'Belvedere Upper (Klimt Kiss)',type:'Μουσείο ⭐⭐⭐ · €21 · παιδιά <19 δωρεάν',emoji:'🎨',lat:48.1915,lng:16.3810},
+    {name:'Belvedere Gardens',type:'Κήπος ⭐⭐⭐ · Δωρεάν · Μπαρόκ πάρκο',emoji:'🌸',lat:48.1912,lng:16.3807},
+    {name:'Hofburg / Sisi Museum',type:'Ανάκτορο ⭐⭐⭐ · €20 ενηλ. / €10 παιδί 6+',emoji:'👑',lat:48.2062,lng:16.3657},
+    {name:'Kunsthistorisches Museum',type:'Μουσείο ⭐⭐⭐ · €22 · παιδιά <19 δωρεάν',emoji:'🖼',lat:48.2036,lng:16.3616},
+    {name:'Naturhistorisches Museum',type:'Μουσείο ⭐⭐⭐ · €22 · παιδιά <19 δωρεάν · δεινόσαυροι!',emoji:'🦕',lat:48.2028,lng:16.3605},
+    {name:'Albertina Museum',type:'Μουσείο ⭐⭐⭐ · €19 · Monet, Picasso, Dürer',emoji:'🖼',lat:48.2046,lng:16.3684},
+    {name:'Imperial Treasury (Schatzkammer)',type:'Μουσείο ⭐⭐⭐ · €16 · παιδιά <19 δωρεάν',emoji:'👑',lat:48.2068,lng:16.3652},
+    {name:'Hundertwasserhaus',type:'Αρχιτεκτονική ⭐⭐⭐ · Εξωτ. δωρεάν',emoji:'🏠',lat:48.2003,lng:16.3778},
+    {name:'Burggarten (άγαλμα Mozart)',type:'Πάρκο ⭐⭐⭐ · Δωρεάν',emoji:'🌳',lat:48.2041,lng:16.3673},
+    {name:'Naschmarkt',type:'Αγορά ⭐⭐⭐ · Δωρεάν · τρόφιμα & αναμνηστικά',emoji:'🛒',lat:48.1987,lng:16.3623},
+    {name:'MuseumsQuartier (MQ)',type:'Πολιτ. Χώρος ⭐⭐⭐ · Εξωτ. δωρεάν',emoji:'🏛',lat:48.2016,lng:16.3572},
+    {name:'Danube Island (Donauinsel)',type:'Πάρκο / Παραλία ⭐⭐⭐ · Δωρεάν · ιδανικό για παιδιά',emoji:'🏖',lat:48.2233,lng:16.3955},
+    {name:'Haus des Meeres (Ενυδρείο)',type:'Ενυδρείο ⭐⭐⭐ · €16 ενηλ. / €9 παιδί · μέσα σε πύργο!',emoji:'🐠',lat:48.1960,lng:16.3456},
+    {name:'Rathaus Lichtshow',type:'Θέαμα ⭐⭐⭐ · Δωρεάν · εντυπωσιακό βραδυνό show',emoji:'✨',lat:48.2105,lng:16.3581},
+    {name:'Setagayapark (Ιαπωνικό Πάρκο)',type:'Πάρκο ⭐⭐⭐ · Δωρεάν · πολύ ωραίο για παιδιά',emoji:'🌸',lat:48.2370,lng:16.3438},
+    {name:'Prater & Riesenrad',type:'Πάρκο / Ρόδα ⭐⭐⭐',emoji:'🎡',lat:48.2164,lng:16.3965},
+    {name:'Wien Museum',type:'Μουσείο ⭐⭐ · ΔΩΡΕΑΝ για όλους (από 2023)',emoji:'🏛',lat:48.1946,lng:16.3682},
+    {name:'Votivkirche + Light of Creation',type:'Εκκλησία / Show ⭐⭐ · Show ~€22',emoji:'🕍',lat:48.2133,lng:16.3609},
+    {name:'Hofburg — Austrian Parliament',type:'Κτίριο ⭐⭐ · Ξεναγία ~€5',emoji:'🏛',lat:48.2051,lng:16.3645},
+    {name:'Leopold Museum',type:'Μουσείο ⭐⭐ · €19 · Schiele, Klimt · παιδιά 7+ μόνο €2.5',emoji:'🎨',lat:48.2016,lng:16.3556},
+    {name:'Alte Donau (λίμνη)',type:'Φύση ⭐⭐ · Δωρεάν · κολύμπι & picnic',emoji:'💧',lat:48.2400,lng:16.4200},
+    {name:'MAK — Museum of Applied Arts',type:'Μουσείο ⭐⭐ · €18 · παιδιά <19 δωρεάν',emoji:'🎭',lat:48.2063,lng:16.3783},
+    {name:'Imperial Crypt (Kaisergruft)',type:'Κρύπτη ⭐⭐ · €8 · 149 Αψβούργοι',emoji:'⚰️',lat:48.2064,lng:16.3668},
+    {name:'Augustinerkirche',type:'Εκκλησία ⭐⭐ · Δωρεάν · γάμοι Αψβούργων',emoji:'⛪',lat:48.2055,lng:16.3672},
+    {name:'Stadtpark (Johann Strauss)',type:'Πάρκο ⭐⭐ · Δωρεάν',emoji:'🎻',lat:48.2028,lng:16.3798},
+    // 🍽 ΕΣΤΙΑΤΟΡΙΑ
+    {name:'Figlmüller',type:'Schnitzel ⚠️ Κράτηση απαραίτητη!',emoji:'🍽',lat:48.2084,lng:16.3742},
+    {name:'Bitzinger Würstelstand',type:'Street food · μπρος στην Albertina · φθηνό',emoji:'🌭',lat:48.2043,lng:16.3682},
+    {name:'AIDA',type:'Ζαχαροπλαστείο · ιδανικό για παιδιά · φθηνό',emoji:'🧁',lat:48.2085,lng:16.3726},
+    {name:'Konditorei Oberlaa',type:'Sachertorte & βιεννέζικα γλυκά',emoji:'🎂',lat:48.1981,lng:16.3727},
+    {name:'Schnitzelwirt',type:'Κλασικό Schnitzel · λαϊκό στυλ',emoji:'🥩',lat:48.1975,lng:16.3504},
+    {name:'Summerstage – Roßauer Lände',type:'Υπαίθριο · δίπλα στον Δούναβη · μουσική',emoji:'🎵',lat:48.2210,lng:16.3640},
+    {name:'Burggarten Restaurant',type:'Εστιατόριο · μέσα στον Burggarten',emoji:'🍽',lat:48.2036,lng:16.3678},
+    // ☕ ΚΑΦΕΔΕΣ (UNESCO Άυλη Κληρονομιά)
+    {name:'Café Central',type:'Kaffehaus ⭐ UNESCO · MUST · γοτθικές καμάρες',emoji:'☕',lat:48.2098,lng:16.3653},
+    {name:'Demel',type:'Βασιλικό ζαχαροπλαστείο · Sachertorte · παιδικός παράδεισος',emoji:'☕',lat:48.2077,lng:16.3665},
+    {name:'Café Sacher',type:'Original Sachertorte (1832) · MUST',emoji:'☕',lat:48.2042,lng:16.3686},
+    {name:'Café Landmann',type:'Δίπλα στο Burgtheater · ιδανικό για πρωινό',emoji:'☕',lat:48.2107,lng:16.3596},
+    {name:'Café Hawelka',type:'Εμβληματικό (1939) · Buchteln βράδυ',emoji:'☕',lat:48.2089,lng:16.3711},
+    {name:'Gerstner Café',type:'Κλασικό βιεννέζικο café · Kärntner Str.',emoji:'☕',lat:48.2071,lng:16.3712},
+  ]},
+  {id:'austria_alps',name:'Αυστριακές Άλπεις',lat:47.3194,lng:9.9794,nights:3,hotel:'h_al',dates:'10–13 Ιουλ',color:'#27ae60',emoji:'⛰️',attrs:[
+    {name:'Hallstatt',type:'UNESCO Χωριό',emoji:'🏡',lat:47.5622,lng:13.6493},
+    {name:'Dachstein Glacier',type:'Φύση',emoji:'🏔',lat:47.4802,lng:13.6047},
+    {name:'Bregenz Altstadt',type:'Πόλη',emoji:'🏙',lat:47.5031,lng:9.7471},
+  ]},
+  {id:'dolomites',name:'Δολομίτες',lat:46.4102,lng:11.8440,nights:0,type:'stop',dates:'13 Ιουλ — Πέρασμα',color:'#f39c12',emoji:'🗻',attrs:[
+    {name:"Cortina d'Ampezzo",type:'Πόλη',emoji:'🏔',lat:46.5368,lng:12.1356},
+    {name:'Tre Cime di Lavaredo',type:'Βουνό',emoji:'⛰️',lat:46.6171,lng:12.2975},
+    {name:'Lago di Braies',type:'Λίμνη',emoji:'🏞',lat:46.6949,lng:12.0842},
+  ]},
+  {id:'venice',name:'Μέστρε / Βενετία',lat:45.4938,lng:12.2421,nights:3,hotel:'h_ve',dates:'13–16 Ιουλ',color:'#2980b9',emoji:'🚤',attrs:[
+    {name:'Πλατεία Αγ. Μάρκου',type:'Αξιοθέατο',emoji:'🕊',lat:45.4341,lng:12.3388},
+    {name:'Grand Canal Gondola',type:'Βόλτα',emoji:'🚣',lat:45.4408,lng:12.3318},
+    {name:'Rialto Bridge',type:'Γέφυρα',emoji:'🌉',lat:45.4380,lng:12.3359},
+    {name:'Murano Island',type:'Νησί',emoji:'🪟',lat:45.4574,lng:12.3545},
+    {name:'Burano Island',type:'Νησί',emoji:'🌈',lat:45.4851,lng:12.4175},
+    {name:"Doge's Palace",type:'Μουσείο',emoji:'🏛',lat:45.4337,lng:12.3401},
+  ]},
+  {id:'zagreb',name:'Ζάγκρεμπ',lat:45.8150,lng:15.9819,nights:1,hotel:'h_zg',dates:'16–17 Ιουλ',color:'#e74c3c',emoji:'🏙',attrs:[
+    {name:'Gornji Grad',type:'Άνω Πόλη',emoji:'🏰',lat:45.8143,lng:15.9762},
+    {name:'Museum of Broken Relationships',type:'Μουσείο',emoji:'💔',lat:45.8148,lng:15.9769},
+    {name:'Dolac Market',type:'Αγορά',emoji:'🍅',lat:45.8144,lng:15.9796},
+    {name:'Tkalčićeva Street',type:'Καφέ',emoji:'☕',lat:45.8153,lng:15.9794},
+  ]},
+  {id:'belgrade2',name:'Βελιγράδι',lat:44.8176,lng:20.4569,nights:1,hotel:'h_bg2',dates:'17–18 Ιουλ',color:'#c0392b',emoji:'🏯',attrs:[
+    {name:'Φρούριο Καλεμεγντάν',type:'Αξιοθέατο',emoji:'🏯',lat:44.8232,lng:20.4506},
+    {name:'Ada Ciganlija',type:'Παραλία ποταμού',emoji:'🏖',lat:44.7889,lng:20.4278},
+  ]},
+  {id:'thessaloniki_end',name:'Θεσσαλονίκη',lat:40.6401,lng:22.9444,nights:0,type:'end',dates:'18 Ιουλ — Επιστροφή 🎉',color:'#2ecc71',emoji:'🏠',attrs:[]},
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let map, userMarker, tempMarker;
+let userLat = null, userLng = null;
+let lastQueryLat = null, lastQueryLng = null;
+let lastProximityLat = null, lastProximityLng = null;
+let proximityRadius = 500;
+let notifications = [];
+let discoveredPOIs = [];
+let discoveredMarkers = [];
+let customPOIMarkers = [];
+let selectedEmoji = '📍';
+let pendingLat = null, pendingLng = null;
+let isAddingMode = false;
+let isManualMode = false;
+let followMode = false;
+let firstFix = true;
+let activeCategories = new Set(['hotel','sight','museum','restaurant','cafe','bar','church','pharmacy','atm','supermarket','historic']);
+
+// Custom POIs — persisted in localStorage
+let customPOIs = JSON.parse(localStorage.getItem('rt26_pois') || '[]');
+
+// ============================================================
+// OVERPASS CATEGORY MAPPING
+// ============================================================
+const OVERPASS_CATS = {
+  museum:     { query: '["tourism"="museum"]', emoji:'🏛', label:'Μουσείο' },
+  restaurant: { query: '["amenity"="restaurant"]', emoji:'🍽', label:'Εστιατόριο' },
+  cafe:       { query: '["amenity"="cafe"]', emoji:'☕', label:'Καφέ' },
+  bar:        { query: '["amenity"="bar"]["amenity"!="fast_food"]', emoji:'🍺', label:'Bar' },
+  church:     { query: '["amenity"="place_of_worship"]', emoji:'⛪', label:'Εκκλησία/Τέμενος' },
+  pharmacy:   { query: '["amenity"="pharmacy"]', emoji:'💊', label:'Φαρμακείο' },
+  atm:        { query: '["amenity"="atm"]', emoji:'💳', label:'ATM' },
+  supermarket:{ query: '["shop"="supermarket"]', emoji:'🛒', label:'Σούπερ μάρκετ' },
+  historic:   { query: '["historic"]', emoji:'🏺', label:'Ιστορικό μνημείο' },
+};
+
+// ============================================================
+// MAP INIT
+// ============================================================
+function initMap() {
+  map = L.map('map',{center:[46.5,16.0],zoom:5,zoomControl:true,tap:true});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB © OpenStreetMap',maxZoom:19}).addTo(map);
+
+  // Route
+  L.polyline(STOPS.map(s=>[s.lat,s.lng]),{color:'#c0392b',weight:3,opacity:.85,dashArray:'10,6'}).addTo(map);
+
+  // City markers
+  STOPS.forEach(s=>{
+    const icon=L.divIcon({className:'',html:`<div style="width:32px;height:32px;border-radius:50%;background:${s.color};color:white;display:flex;align-items:center;justify-content:center;font-size:14px;border:2.5px solid white;box-shadow:0 3px 12px rgba(0,0,0,.6);">${s.emoji}</div>`,iconSize:[32,32],iconAnchor:[16,16]});
+    L.marker([s.lat,s.lng],{icon,zIndexOffset:100}).addTo(map).on('click',()=>focusStop(s.id));
+  });
+
+  // Hotel markers
+  HOTELS.forEach(h=>{
+    const bg=h.id==='h_al'?'#27ae60':'#1a6fc4';
+    const icon=L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:5px;background:${bg};color:white;display:flex;align-items:center;justify-content:center;font-size:13px;border:2px solid white;box-shadow:0 3px 12px rgba(0,0,0,.6);">${h.emoji}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+    L.marker([h.lat,h.lng],{icon,zIndexOffset:200}).addTo(map).on('click',()=>showHotelPopup(h));
+  });
+
+  // Custom POIs
+  renderCustomMarkers();
+
+  // Map click: add mode OR manual location mode
+  map.on('click', e => {
+    if(isAddingMode) {
+      pendingLat = e.latlng.lat;
+      pendingLng = e.latlng.lng;
+      if(tempMarker) map.removeLayer(tempMarker);
+      tempMarker = L.marker([pendingLat,pendingLng],{
+        icon:L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:50%;background:var(--custom,#e67e22);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);">${selectedEmoji}</div>`,iconSize:[28,28],iconAnchor:[14,14]})
+      }).addTo(map);
+      document.getElementById('poi-loc').value = `${pendingLat.toFixed(5)}, ${pendingLng.toFixed(5)}`;
+      openModal();
+    } else if(isManualMode) {
+      setManualLocation(e.latlng.lat, e.latlng.lng);
+    }
+  });
+}
+
+// ============================================================
+// FOCUSSTOP / HOTEL POPUP
+// ============================================================
+function showHotelPopup(h){
+  map.flyTo([h.lat,h.lng],15,{duration:1});
+  L.popup().setLatLng([h.lat,h.lng]).setContent(`<div class="pop-hotel">${h.emoji} ${h.name}</div><div class="pop-meta">📅 ${h.checkin} → ${h.checkout} · ${h.nights} νύχτες</div><div class="pop-meta">📍 ${h.address}</div>`).openOn(map);
+}
+
+function focusStop(id){
+  const s=STOPS.find(x=>x.id===id); if(!s) return;
+  map.flyTo([s.lat,s.lng],13,{duration:1});
+  const hotel=s.hotel?HOTELS.find(h=>h.id===s.hotel):null;
+  const hl=hotel?`<div style="margin:5px 0;padding:5px;background:#1a3a5c;border-radius:3px;font-size:11px;color:#6ab0f5;">🏨 ${hotel.name}<br><span style="color:#888">${hotel.checkin}→${hotel.checkout}</span></div>`:'';
+  const al=s.attrs.map(a=>`<li>${a.emoji} ${a.name}</li>`).join('');
+  L.popup().setLatLng([s.lat,s.lng]).setContent(`<div class="pop-title">${s.emoji} ${s.name}</div><div class="pop-meta">${s.dates}</div>${hl}${al?`<ul class="pop-list" style="margin-top:5px">${al}</ul>`:''}`).openOn(map);
+  document.querySelectorAll('.stop-card').forEach(c=>c.classList.remove('active','open'));
+  const card=document.getElementById('card-'+id);
+  if(card){card.classList.add('active','open');card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+
+function flyToAttr(lat,lng,name){
+  map.flyTo([lat,lng],16,{duration:1});
+  L.popup().setLatLng([lat,lng]).setContent(`<div class="pop-title">📍 ${name}</div>`).openOn(map);
+}
+
+function flyToHotel(hid){
+  const h=HOTELS.find(x=>x.id===hid); if(!h) return;
+  map.flyTo([h.lat,h.lng],15,{duration:1}); showHotelPopup(h);
+}
+
+// ============================================================
+// RENDER SIDEBAR
+// ============================================================
+function renderItinerary(){
+  const inner=document.getElementById('itin-inner'); inner.innerHTML='';
+  STOPS.forEach(s=>{
+    const hotel=s.hotel?HOTELS.find(h=>h.id===s.hotel):null;
+    const nightsLabel=s.nights>0?`<span class="stop-nights">${s.nights} 🌙</span>`:s.type==='stop'?`<span class="stop-nights" style="background:#6c757d;color:white">στάση</span>`:'';
+    const hotelHTML=hotel?`<div class="sec-div">🏨 Κατάλυμα</div><div class="hotel-block" onclick="event.stopPropagation();flyToHotel('${hotel.id}')"><div class="hb-name">${hotel.emoji} ${hotel.name}</div><div class="hb-addr">📍 ${hotel.address}</div><div class="hb-dates">📅 ${hotel.checkin} → ${hotel.checkout} · ${hotel.nights} βράδια</div></div>`:'';
+    const attrsHTML=s.attrs.length?`<div class="sec-div">📍 Αξιοθέατα</div>${s.attrs.map(a=>`<div class="attr-item" onclick="event.stopPropagation();flyToAttr(${a.lat},${a.lng},'${a.name}')"><span class="ai">${a.emoji}</span><div><div class="an">${a.name}</div><div class="at">${a.type}</div></div></div>`).join('')}`:'';
+    const div=document.createElement('div');
+    div.className='stop-card'; div.id='card-'+s.id;
+    div.onclick=()=>toggleStop(s.id);
+    div.innerHTML=`<div class="stop-header"><div class="stop-dot" style="background:${s.color};color:white">${s.emoji}</div><div style="flex:1"><div class="stop-name">${s.name}</div><div class="stop-meta">${s.dates}</div></div>${nightsLabel}</div><div class="sub-list">${hotelHTML}${attrsHTML}</div>`;
+    inner.appendChild(div);
+  });
+}
+
+function renderHotels(){
+  const inner=document.getElementById('hotels-inner');
+  inner.innerHTML=`<div style="padding:2px 0 8px;font-family:'Bebas Neue';font-size:13px;letter-spacing:1px;color:var(--muted)">7 ΚΑΤΑΛΥΜΑΤΑ · 11 ΒΡΑΔΙΑ</div>`;
+  HOTELS.forEach(h=>{
+    const bg=h.id==='h_al'?'#27ae60':'#1a6fc4';
+    const div=document.createElement('div'); div.className='hotel-full-card'; div.onclick=()=>flyToHotel(h.id);
+    div.innerHTML=`<div class="hfc-head" style="background:${bg}"><span class="hfc-city">${h.emoji} ${h.city}</span><span class="nb">${h.nights} 🌙</span></div><div class="hfc-body"><div class="hfc-name">${h.name}</div><div class="hfc-addr">📍 ${h.address}</div><div class="hfc-dates">📅 Check-in: ${h.checkin} · Check-out: ${h.checkout}</div></div>`;
+    inner.appendChild(div);
+  });
+}
+
+function renderCustomList(){
+  const inner=document.getElementById('custom-inner');
+  if(customPOIs.length===0){
+    inner.innerHTML=`<div class="no-content"><div class="big">📌</div>Δεν έχεις προσθέσει σημεία ακόμα.<br><span style="font-size:11px;color:#bbb;margin-top:6px;display:block">Πάτα ➕ στον χάρτη για να προσθέσεις</span></div>`;
+    return;
+  }
+  inner.innerHTML='';
+  customPOIs.forEach((p,i)=>{
+    const div=document.createElement('div'); div.className='custom-poi-card';
+    div.innerHTML=`<div class="cpc-color"></div><div class="cpc-body" onclick="flyToAttr(${p.lat},${p.lng},'${p.name.replace(/'/g,"\\'")}')"><div class="cpc-name">${p.emoji} ${p.name}</div><div class="cpc-type">${p.cat}</div></div><div class="cpc-del" onclick="deletePOI(${i})">🗑</div>`;
+    inner.appendChild(div);
+  });
+}
+
+function renderNotifs(){
+  const inner=document.getElementById('notif-inner');
+  if(notifications.length===0){
+    inner.innerHTML='<div class="no-content"><div class="big">🔕</div>Καμία ειδοποίηση ακόμα.</div>';
+    return;
+  }
+  inner.innerHTML=`<div class="notif-clear" onclick="clearNotifs()">Καθαρισμός όλων</div>`+
+    notifications.map(n=>`<div class="notif-card type-${n.ntype||'stop'}"><div class="notif-head"><span style="font-size:16px">${n.icon||'🔔'}</span><span class="notif-title">${n.title}</span><span class="notif-time-lbl">${n.time}</span></div><div class="notif-body"><div class="notif-city-lbl">${n.city||''}</div>${n.body}</div></div>`).join('');
+}
+
+function clearNotifs(){ notifications=[]; renderNotifs(); }
+
+function toggleStop(id){
+  const card=document.getElementById('card-'+id); if(!card) return;
+  const open=card.classList.contains('open');
+  document.querySelectorAll('.stop-card').forEach(c=>c.classList.remove('open','active'));
+  if(!open){card.classList.add('open','active'); focusStop(id);}
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active',['itin','hotels','custom','notifs'][i]===tab);
+  });
+  ['itin','hotels','custom','notifs'].forEach(t=>{
+    document.getElementById('tab-'+t).classList.toggle('hidden',t!==tab);
+  });
+  document.getElementById('cat-filter').style.display=(tab==='itin'||tab==='custom')?'flex':'none';
+}
+
+// ============================================================
+// CATEGORY FILTERS
+// ============================================================
+function toggleCat(btn,cat){
+  if(activeCategories.has(cat)){activeCategories.delete(cat);btn.classList.remove('on');}
+  else{activeCategories.add(cat);btn.classList.add('on');}
+}
+
+// ============================================================
+// ADD CUSTOM POI
+// ============================================================
+function startAddPOI(){
+  isAddingMode=true;
+  document.getElementById('tap-hint').style.display='block';
+  toast('📌 Πάτα στον χάρτη','Επίλεξε τοποθεσία για το νέο σημείο',false,'t-custom');
+  // On desktop, open modal directly at map center
+  if(window.innerWidth>768){
+    const c=map.getCenter();
+    pendingLat=c.lat; pendingLng=c.lng;
+    document.getElementById('poi-loc').value=`${pendingLat.toFixed(5)}, ${pendingLng.toFixed(5)}`;
+    openModal();
+  }
+}
+
+function openModal(){
+  isAddingMode=false;
+  document.getElementById('tap-hint').style.display='none';
+  document.getElementById('poi-modal').classList.add('open');
+  document.getElementById('poi-name').focus();
+}
+
+function closeModal(){
+  document.getElementById('poi-modal').classList.remove('open');
+  if(tempMarker){map.removeLayer(tempMarker);tempMarker=null;}
+  pendingLat=null; pendingLng=null; isAddingMode=false;
+  document.getElementById('tap-hint').style.display='none';
+}
+
+function closeModalIfOutside(e){
+  if(e.target.id==='poi-modal') closeModal();
+}
+
+function selectEmoji(btn,emoji){
+  selectedEmoji=emoji;
+  document.querySelectorAll('.emoji-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  if(tempMarker){
+    map.removeLayer(tempMarker);
+    tempMarker=L.marker([pendingLat,pendingLng],{
+      icon:L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:50%;background:#e67e22;color:white;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);">${emoji}</div>`,iconSize:[28,28],iconAnchor:[14,14]})
+    }).addTo(map);
+  }
+}
+
+function savePOI(){
+  const name=document.getElementById('poi-name').value.trim();
+  const cat=document.getElementById('poi-cat').value;
+  if(!name){document.getElementById('poi-name').focus();return;}
+  if(pendingLat===null){toast('⚠️ Τοποθεσία','Πάτα πρώτα στον χάρτη για θέση',true);return;}
+  const poi={id:'custom_'+Date.now(),name,cat,emoji:selectedEmoji,lat:pendingLat,lng:pendingLng};
+  customPOIs.push(poi);
+  localStorage.setItem('rt26_pois',JSON.stringify(customPOIs));
+  tempMarker=null; // don't remove it, keep it as the real marker
+  closeModal();
+  renderCustomList();
+  renderCustomMarkers();
+  toast(`✅ Προστέθηκε!`,`"${name}" αποθηκεύτηκε`,false,'t-custom');
+  switchTab('custom');
+  document.getElementById('poi-name').value='';
+  selectedEmoji='📍';
+  document.querySelectorAll('.emoji-btn').forEach((b,i)=>{b.classList.toggle('sel',i===0);});
+}
+
+function deletePOI(i){
+  customPOIs.splice(i,1);
+  localStorage.setItem('rt26_pois',JSON.stringify(customPOIs));
+  renderCustomList();
+  renderCustomMarkers();
+}
+
+function renderCustomMarkers(){
+  customPOIMarkers.forEach(m=>map.removeLayer(m));
+  customPOIMarkers=[];
+  customPOIs.forEach(p=>{
+    const icon=L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:50%;background:#e67e22;color:white;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 3px 10px rgba(0,0,0,.5);">${p.emoji}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+    const m=L.marker([p.lat,p.lng],{icon,zIndexOffset:300}).addTo(map)
+      .on('click',()=>{
+        L.popup().setLatLng([p.lat,p.lng]).setContent(`<div class="pop-custom">${p.emoji} ${p.name}</div><div class="pop-meta">📌 Custom · ${p.cat}</div>`).openOn(map);
+      });
+    customPOIMarkers.push(m);
+  });
+}
+
+// ============================================================
+// OVERPASS API — LIVE POI DISCOVERY
+// ============================================================
+async function searchNearbyPOIs(lat, lng){
+  const searchLat = lat ?? userLat;
+  const searchLng = lng ?? userLng;
+
+  if(searchLat===null){
+    toast('📍 Χρειάζεται GPS','Ενεργοποίησε πρώτα την τοποθεσία σου',true);
+    locateMe();
+    return;
+  }
+
+  const activeCats = Object.keys(OVERPASS_CATS).filter(c=>activeCategories.has(c));
+  if(activeCats.length===0){
+    toast('⚠️ Φίλτρα','Ενεργοποίησε τουλάχιστον μια κατηγορία',true);
+    return;
+  }
+
+  toast('🔍 Αναζήτηση...','Ψάχνω στο OpenStreetMap...',false,'t-poi');
+
+  // Clear previous discovered markers
+  discoveredMarkers.forEach(m=>map.removeLayer(m));
+  discoveredMarkers=[];
+  discoveredPOIs=[];
+
+  const r = proximityRadius;
+  const queries = activeCats.map(c=>`node${OVERPASS_CATS[c].query}(around:${r},${searchLat},${searchLng});`).join('\n');
+  const body = `[out:json][timeout:10];\n(${queries});\nout body;`;
+
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter',{
+      method:'POST',
+      body:'data='+encodeURIComponent(body)
+    });
+    const data = await res.json();
+    const elements = data.elements || [];
+
+    if(elements.length===0){
+      toast('🔍 Κανένα αποτέλεσμα',`Τίποτα εντός ${fmtDist(r)}`,false,'t-poi');
+      return;
+    }
+
+    // Group & limit per category
+    const byCat = {};
+    elements.forEach(el=>{
+      const cat = detectCat(el);
+      if(!cat || !activeCategories.has(cat)) return;
+      if(!byCat[cat]) byCat[cat]=[];
+      if(byCat[cat].length<5) byCat[cat].push(el);
+    });
+
+    let total=0;
+    Object.entries(byCat).forEach(([cat,items])=>{
+      const catInfo = OVERPASS_CATS[cat];
+      items.forEach(el=>{
+        const name = el.tags?.name || el.tags?.['name:en'] || el.tags?.['name:el'] || catInfo.label;
+        const d = dist(searchLat,searchLng,el.lat,el.lon);
+        discoveredPOIs.push({name,cat,emoji:catInfo.emoji,label:catInfo.label,lat:el.lat,lng:el.lon,dist:d});
+
+        // Add map marker
+        const icon=L.divIcon({className:'',html:`<div style="width:24px;height:24px;border-radius:50%;background:#7b2d8b;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">${catInfo.emoji}</div>`,iconSize:[24,24],iconAnchor:[12,12]});
+        const m=L.marker([el.lat,el.lon],{icon,zIndexOffset:400}).addTo(map)
+          .on('click',()=>{
+            L.popup().setLatLng([el.lat,el.lon]).setContent(`<div class="pop-poi">${catInfo.emoji} ${name}</div><div class="pop-meta">${catInfo.label} · ${fmtDist(d)}</div>`).openOn(map);
+            addNotif({title:`${catInfo.emoji} ${name}`,body:`${fmtDist(d)} από σένα · ${catInfo.label}`,city:'',ntype:'poi',icon:catInfo.emoji});
+          });
+        discoveredMarkers.push(m);
+        total++;
+      });
+    });
+
+    // Proximity notifications for very close ones
+    const close = discoveredPOIs.filter(p=>p.dist<proximityRadius*0.5);
+    close.forEach(p=>addNotif({title:`${p.emoji} ${p.name}`,body:`Μόλις ${fmtDist(p.dist)} από σένα · ${p.label}`,city:'',ntype:'poi',icon:p.emoji}));
+
+    toast(`🔍 ${total} σημεία βρέθηκαν`,`Εντός ${fmtDist(r)} — μωβ markers στον χάρτη`,false,'t-poi');
+    if(close.length>0) switchTab('notifs');
+
+    lastQueryLat=searchLat; lastQueryLng=searchLng;
+
+  } catch(e){
+    toast('⚠️ Σφάλμα','Δεν ήταν δυνατή η σύνδεση στο OpenStreetMap',true);
+    console.error(e);
+  }
+}
+
+function detectCat(el){
+  const t=el.tags||{};
+  if(t.tourism==='museum') return 'museum';
+  if(t.amenity==='restaurant') return 'restaurant';
+  if(t.amenity==='cafe') return 'cafe';
+  if(t.amenity==='bar') return 'bar';
+  if(t.amenity==='place_of_worship') return 'church';
+  if(t.amenity==='pharmacy') return 'pharmacy';
+  if(t.amenity==='atm') return 'atm';
+  if(t.shop==='supermarket') return 'supermarket';
+  if(t.historic) return 'historic';
+  return null;
+}
+
+// ============================================================
+// GEOLOCATION
+// ============================================================
+function locateMe(){
+  if(!navigator.geolocation){
+    toast('🚫 GPS μη διαθέσιμο','Χρησιμοποίησε 🎯 για χειροκίνητη τοποθεσία',true);
+    return;
+  }
+  toast('📍 Εντοπισμός...','Ψάχνω τη θέση σου...',false);
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      firstFix = true; // fly on next update
+      updateUserMarker(pos.coords.latitude, pos.coords.longitude, true);
+    },
+    err => {
+      toast('⚠️ GPS απέτυχε','Χρησιμοποίησε 🎯 για χειροκίνητη τοποθεσία',true);
+    },
+    {enableHighAccuracy:true, timeout:12000, maximumAge:0}
+  );
+}
+
+// Called from watchPosition — only update marker, NO flyTo unless followMode
+function handleLocationWatch(lat, lng, accuracy){
+  // Skip very inaccurate fixes (>100m) unless it's the first one
+  if(accuracy && accuracy > 100 && !firstFix) return;
+
+  userLat = lat; userLng = lng;
+  updateUserMarker(lat, lng, firstFix || followMode);
+  firstFix = false;
+
+  // Proximity check only if moved >50m since last check
+  if(lastProximityLat===null || dist(lat,lng,lastProximityLat,lastProximityLng) > 50){
+    lastProximityLat = lat; lastProximityLng = lng;
+    checkStaticProximity(lat, lng);
+  }
+
+  // Overpass search only if moved >300m
+  if(lastQueryLat===null || dist(lat,lng,lastQueryLat,lastQueryLng) > 300){
+    searchNearbyPOIs(lat, lng);
+  }
+}
+
+function updateUserMarker(lat, lng, doFly){
+  userLat = lat; userLng = lng;
+  if(userMarker) map.removeLayer(userMarker);
+  const icon = L.divIcon({
+    className:'',
+    html:`<div style="width:18px;height:18px;border-radius:50%;background:#00d2ff;border:3px solid white;box-shadow:0 0 0 5px rgba(0,210,255,.25);"></div>`,
+    iconSize:[18,18], iconAnchor:[9,9]
+  });
+  userMarker = L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);
+  if(doFly) map.flyTo([lat,lng], 15, {duration:1.2});
+}
+
+// Follow mode toggle
+function toggleFollow(){
+  followMode = !followMode;
+  const btn = document.getElementById('fab-follow');
+  btn.style.background = followMode ? '#27ae60' : '';
+  btn.style.transform = followMode ? 'scale(1.1)' : '';
+  toast(followMode ? '🧭 Follow ON' : '🧭 Follow OFF',
+        followMode ? 'Ο χάρτης ακολουθεί τη θέση σου' : 'Ελεύθερη πλοήγηση στον χάρτη', false);
+  if(followMode && userLat !== null) map.flyTo([userLat,userLng],15,{duration:1});
+}
+
+// Manual location mode — tap anywhere on map
+function startManualLocation(){
+  isManualMode = true;
+  isAddingMode = false;
+  document.getElementById('manual-hint').style.display = 'block';
+  document.getElementById('tap-hint').style.display = 'none';
+  const btn = document.getElementById('fab-manual');
+  btn.style.background = '#1a6fc4';
+  toast('🎯 Χειροκίνητη θέση','Πάτα στον χάρτη για να ορίσεις την τοποθεσία σου',false,'t-hotel');
+}
+
+function setManualLocation(lat, lng){
+  isManualMode = false;
+  document.getElementById('manual-hint').style.display = 'none';
+  document.getElementById('fab-manual').style.background = '';
+  updateUserMarker(lat, lng, true);
+  firstFix = false;
+  checkStaticProximity(lat, lng);
+  if(lastQueryLat===null || dist(lat,lng,lastQueryLat,lastQueryLng)>300){
+    searchNearbyPOIs(lat, lng);
+  }
+  toast('🎯 Θέση ορίστηκε',`${lat.toFixed(4)}, ${lng.toFixed(4)}`,false,'t-hotel');
+}
+
+function checkStaticProximity(lat,lng){
+  HOTELS.forEach(h=>{
+    const d=dist(lat,lng,h.lat,h.lng);
+    if(d<proximityRadius) addNotif({title:`🏨 ${h.name}`,body:`${fmtDist(d)} από το ξενοδοχείο σου · ${h.checkin}→${h.checkout}`,city:h.city,ntype:'hotel',icon:'🏨'});
+  });
+  STOPS.forEach(s=>{
+    s.attrs.forEach(a=>{
+      if(!activeCategories.has('sight')) return;
+      const d=dist(lat,lng,a.lat,a.lng);
+      if(d<proximityRadius) addNotif({title:`${a.emoji} ${a.name}`,body:`${fmtDist(d)} · ${a.type}`,city:s.name,ntype:'stop',icon:a.emoji});
+    });
+  });
+  customPOIs.forEach(p=>{
+    const d=dist(lat,lng,p.lat,p.lng);
+    if(d<proximityRadius) addNotif({title:`${p.emoji} ${p.name}`,body:`${fmtDist(d)} · Custom σημείο`,city:'',ntype:'custom',icon:p.emoji});
+  });
+}
+
+function updateRadius(v){
+  proximityRadius=parseInt(v);
+  document.getElementById('radius-display').textContent=v>=1000?(v/1000).toFixed(1)+'km':v+'m';
+}
+
+function dist(lat1,lng1,lat2,lng2){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m){return m>=1000?(m/1000).toFixed(1)+'km':Math.round(m)+'m';}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function addNotif(n){
+  notifications.unshift({...n,time:new Date().toLocaleTimeString('el',{hour:'2-digit',minute:'2-digit'})});
+  if(notifications.length>50) notifications=notifications.slice(0,50);
+  renderNotifs();
+  const badge=document.querySelector('.tab-btn:nth-child(4)');
+  if(badge) badge.textContent=`🔔 ${notifications.length}`;
+}
+
+function toast(title,body,urgent,cls){
+  const c=document.getElementById('toasts');
+  const el=document.createElement('div');
+  el.className='toast'+(cls?' '+cls:urgent?' t-urgent':'');
+  el.innerHTML=`<div class="toast-title">${title}</div>${body}`;
+  c.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .5s';setTimeout(()=>el.remove(),500);},4500);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+initMap();
+renderItinerary();
+renderHotels();
+renderCustomList();
+switchTab('itin');
+
+// Hide cat filter on non-relevant tabs
+document.getElementById('cat-filter').style.display='flex';
+
+// GPS watch — silent background tracking, NO flyTo
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(
+    pos => handleLocationWatch(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => {},
+    {enableHighAccuracy:true, maximumAge:5000, timeout:15000}
+  );
+}
+
+setTimeout(()=>toast('🚗 Καλό ταξίδι!','5–18 Ιουλ 2026 · 13 ημέρες',false),500);
+setTimeout(()=>toast('🔍 Auto-discovery','Θα βρίσκω μουσεία, εστιατόρια, ATM κλπ. γύρω σου!',false,'t-poi'),1400);
+</script>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('SW registered'))
+      .catch(e => console.log('SW error:', e));
+  });
+}
+</script>
+</body>
+</html>
